@@ -33,7 +33,8 @@ def get_courses(request: Request, db: Session = Depends(get_session)):
     if creds.expired and creds.refresh_token:
         creds.refresh(google.auth.transport.requests.Request())
         db_cred.token = creds.token
-        db_cred.expiry = creds.expiry
+        from datetime import timezone
+        db_cred.expiry = creds.expiry.replace(tzinfo=timezone.utc) if creds.expiry else None
         db.add(db_cred)
         db.commit()
 

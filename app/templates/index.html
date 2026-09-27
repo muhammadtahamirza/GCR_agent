@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Classroom Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+    <!-- Navbar -->
+    <nav class="bg-blue-600 p-4 text-white flex justify-between items-center shadow-md">
+        <h1 class="text-xl font-bold">GCR AI Agent</h1>
+        {% if user_id and user %}
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2">
+                    {% if user.picture %}
+                        <img src="{{ user.picture }}" alt="Profile" class="w-8 h-8 rounded-full border border-white">
+                    {% endif %}
+                    <span class="font-medium text-sm hidden sm:block">{{ user.name }}</span>
+                </div>
+                <a href="/auth/logout" class="bg-red-500 hover:bg-red-700 px-4 py-2 rounded text-sm font-semibold transition shadow-sm">Logout</a>
+            </div>
+        {% endif %}
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow flex items-center justify-center p-4">
+        {% if not user_id %}
+            <!-- Login Prompt -->
+            <div class="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
+                <h2 class="text-2xl font-bold mb-4 text-gray-800">Welcome to GCR Agent</h2>
+                <p class="text-gray-600 mb-6">Manage your Google Classroom courses and announcements with the power of AI.</p>
+                <a href="/auth/login" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition shadow-md w-full">
+                    Sign in with Google
+                </a>
+            </div>
+        {% else %}
+            <!-- Chat Interface -->
+            <div class="bg-white rounded-lg shadow-lg max-w-4xl w-full h-full max-h-[80vh] flex flex-col overflow-hidden">
+                <!-- Chat History -->
+                <div id="chat-box" class="flex-grow overflow-y-auto p-6 space-y-4 bg-gray-50">
+                    <div class="flex justify-start">
+                        <div class="bg-blue-100 text-gray-800 px-4 py-3 rounded-lg max-w-[80%] shadow-sm">
+                            Hello! I am your Google Classroom Assistant. How can I help you today?
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Input -->
+                <div class="border-t p-4 bg-white flex space-x-2">
+                    <input type="text" id="message-input" placeholder="Ask about your courses or assignments..." class="flex-grow border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" onkeypress="handleKeyPress(event)">
+                    <button onclick="sendMessage()" id="send-button" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition flex items-center justify-center min-w-[100px]">
+                        Send
+                    </button>
+                </div>
+            </div>
+        {% endif %}
+    </main>
+
+    {% if user_id %}
+    <script>
+        let conversationId = null;
+
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const chatBox = document.getElementById('chat-box');
+            const sendBtn = document.getElementById('send-button');
+            const messageText = input.value.trim();
+
+            if (!messageText) return;
+
+            // Add user message to UI
+            input.value = '';
+            input.disabled = true;
+            sendBtn.disabled = true;
+            sendBtn.innerText = '...';
+
+            chatBox.innerHTML += `
+                <div class="flex justify-end">
+                    <div class="bg-blue-600 text-white px-4 py-3 rounded-lg max-w-[80%] shadow-sm whitespace-pre-wrap">${escapeHtml(messageText)}</div>
+                </div>
+            `;
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            try {
+                // Send to backend
+                const response = await fetch('/api/chat/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: messageText,
+                        conversation_id: conversationId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(response.statusText);
+                }
+
+                const data = await response.json();
+                conversationId = data.conversation_id;
+
+                // Add agent response to UI
+                const htmlReply = typeof marked !== 'undefined' ? marked.parse(data.reply) : escapeHtml(data.reply);
+                chatBox.innerHTML += `
+                    <div class="flex justify-start">
+                        <div class="bg-blue-100 text-gray-800 px-4 py-3 rounded-lg max-w-[80%] shadow-sm prose prose-blue">${htmlReply}</div>
+                    </div>
+                `;
+            } catch (error) {
+                chatBox.innerHTML += `
+                    <div class="flex justify-center my-2">
+                        <div class="bg-red-100 text-red-600 text-sm px-3 py-1 rounded-full border border-red-200">Error connecting to server. Please try again.</div>
+                    </div>
+                `;
+            } finally {
+                input.disabled = false;
+                sendBtn.disabled = false;
+                sendBtn.innerText = 'Send';
+                input.focus();
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        }
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+    </script>
+    <!-- Add marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    {% endif %}
+</body>
+</html>

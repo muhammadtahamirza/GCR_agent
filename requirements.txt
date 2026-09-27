@@ -29,3 +29,5 @@ uvicorn
 sqlmodel
 python-dotenv
 itsdangerous
+
+jinja2
